@@ -1,0 +1,15 @@
+{
+  "name": "ai-portfolio-analyzer",
+  "version": "1.0.0",
+  "description": "AI-powered portfolio screenshot analyzer",
+  "private": true,
+  "scripts": {
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:build": "docker-compose build"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "license": "MIT"
+}
