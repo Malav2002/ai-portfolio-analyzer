@@ -20,14 +20,14 @@ const upload = multer({
   },
 });
 
-// Upload and process portfolio screenshot
+// Upload and process portfolio screenshot with real-time market data
 router.post('/upload', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No image file provided' });
     }
 
-    console.log('Processing portfolio upload:', {
+    console.log('Processing portfolio upload with market data:', {
       filename: req.file.originalname,
       size: req.file.size,
       mimetype: req.file.mimetype
@@ -40,34 +40,36 @@ router.post('/upload', upload.single('image'), async (req, res) => {
       contentType: req.file.mimetype
     });
 
-    // Call ML service for OCR processing
+    // Call ML service for OCR processing WITH market data
     const mlServiceUrl = process.env.ML_SERVICE_URL || 'http://ml-service:8002';
     
     try {
-      console.log('Calling ML service at:', `${mlServiceUrl}/api/ocr/parse-portfolio`);
+      console.log('Calling ML service with market data at:', `${mlServiceUrl}/api/ocr/parse-portfolio-with-market-data`);
       
       const mlResponse = await axios.post(
-        `${mlServiceUrl}/api/ocr/parse-portfolio`,
+        `${mlServiceUrl}/api/ocr/parse-portfolio-with-market-data`,
         formData,
         {
           headers: {
             ...formData.getHeaders(),
           },
-          timeout: 60000, // 60 second timeout for OCR processing
+          timeout: 90000, // 90 second timeout for OCR + market data
         }
       );
 
       const { ocr_result, portfolio } = mlResponse.data;
 
-      console.log('ML service response:', {
+      console.log('ML service response with market data:', {
         text_length: ocr_result.text?.length || 0,
         confidence: ocr_result.confidence,
-        holdings_count: portfolio.holdings_count
+        holdings_count: portfolio.holdings_count,
+        live_total_value: portfolio.live_total_value,
+        holdings_with_live_data: portfolio.holdings_with_live_data
       });
 
       res.json({
         success: true,
-        message: 'Portfolio processed successfully with real OCR',
+        message: 'Portfolio processed successfully with real-time market data',
         data: {
           filename: req.file.originalname,
           size: req.file.size,
@@ -78,11 +80,21 @@ router.post('/upload', upload.single('image'), async (req, res) => {
             word_count: ocr_result.word_count || 0
           },
           portfolio: {
+            // Original parsed data
             total_value: portfolio.total_value || null,
             broker: portfolio.broker || 'unknown',
             holdings_count: portfolio.holdings_count || 0,
-            holdings: portfolio.holdings || [],
-            confidence: portfolio.confidence || 0
+            confidence: portfolio.confidence || 0,
+            
+            // Live market data
+            live_total_value: portfolio.live_total_value || null,
+            live_total_gain_loss: portfolio.live_total_gain_loss || null,
+            live_total_gain_loss_percent: portfolio.live_total_gain_loss_percent || null,
+            holdings_with_live_data: portfolio.holdings_with_live_data || 0,
+            market_data_timestamp: portfolio.market_data_timestamp,
+            
+            // Holdings with enhanced data
+            holdings: portfolio.holdings || []
           }
         }
       });
@@ -90,15 +102,15 @@ router.post('/upload', upload.single('image'), async (req, res) => {
     } catch (mlError) {
       console.error('ML service error:', mlError.message);
       
-      // Fallback to demo data if ML service fails
+      // Fallback to basic processing without market data
       res.json({
         success: true,
-        message: 'Portfolio processed successfully (fallback mode)',
+        message: 'Portfolio processed successfully (basic mode - market data unavailable)',
         data: {
           filename: req.file.originalname,
           size: req.file.size,
           ocr_result: {
-            text: 'FALLBACK: Could not process image with OCR',
+            text: 'Could not process image with OCR',
             confidence: 0,
             method: 'fallback'
           },
@@ -122,11 +134,31 @@ router.post('/upload', upload.single('image'), async (req, res) => {
   }
 });
 
+// Get real-time quote for a specific symbol
+router.get('/quote/:symbol', async (req, res) => {
+  try {
+    const symbol = req.params.symbol.toUpperCase();
+    const mlServiceUrl = process.env.ML_SERVICE_URL || 'http://ml-service:8002';
+    
+    const response = await axios.post(`${mlServiceUrl}/api/market/quote/${symbol}`);
+    
+    res.json(response.data);
+    
+  } catch (error) {
+    console.error('Quote fetch error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch stock quote',
+      symbol: req.params.symbol
+    });
+  }
+});
+
 // Health check for portfolio service
 router.get('/health', (req, res) => {
   res.json({ 
     status: 'healthy',
-    service: 'portfolio-upload',
+    service: 'portfolio-upload-with-market-data',
     timestamp: new Date().toISOString()
   });
 });

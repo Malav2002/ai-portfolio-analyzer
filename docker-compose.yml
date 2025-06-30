@@ -37,12 +37,21 @@ services:
       - /app/node_modules
 
   ml-service:
-    build: ./ml-service
+    build:
+      context: ./ml-service
+      dockerfile: Dockerfile
     container_name: portfolio_ml_service
+    environment:
+      - ALPHA_VANTAGE_API_KEY=${ALPHA_VANTAGE_API_KEY}
+      - FINANCIAL_MODELING_PREP_API_KEY=${FINANCIAL_MODELING_PREP_API_KEY}
+      - POLYGON_API_KEY=${POLYGON_API_KEY}
     ports:
       - "8002:8002"
     volumes:
       - ./ml-service:/app
+    depends_on:
+      - postgres
+      - redis
 
 volumes:
   postgres_data:

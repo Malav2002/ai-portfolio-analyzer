@@ -223,48 +223,143 @@ function UploadForm() {
                     </p>
                   </div>
                 </div>
+{/* Live Market Data Section */}
+{result.data.portfolio.live_total_value && (
+  <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-6 mb-6">
+    <div className="flex items-center justify-between mb-4">
+      <h4 className="text-lg font-semibold text-gray-900 flex items-center">
+        📈 Live Market Data
+        <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+          REAL-TIME
+        </span>
+      </h4>
+      <div className="text-xs text-gray-500">
+        Updated: {result.data.portfolio.market_data_timestamp ? 
+          new Date(result.data.portfolio.market_data_timestamp).toLocaleTimeString() : 
+          'Just now'}
+      </div>
+    </div>
 
-                {/* Holdings Table */}
-                {result.data.portfolio.holdings && result.data.portfolio.holdings.length > 0 && (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Symbol</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Gain/Loss</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {result.data.portfolio.holdings.map((holding: any, index: number) => (
-                          <tr key={index}>
-                            <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
-                              {holding.symbol}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-gray-700">
-                              {holding.quantity || '-'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-gray-700">
-                              {holding.price ? `$${holding.price.toFixed(2)}` : '-'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-gray-700">
-                              {holding.value ? `$${holding.value.toLocaleString()}` : '-'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {holding.gainLoss !== undefined ? (
-                                <span className={holding.gainLoss >= 0 ? 'text-green-600' : 'text-red-600'}>
-                                  {holding.gainLoss >= 0 ? '+' : ''}${holding.gainLoss.toFixed(2)}
-                                </span>
-                              ) : '-'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+      <div className="bg-white rounded-lg p-4 text-center shadow-sm">
+        <p className="text-sm text-blue-600 font-medium">Live Portfolio Value</p>
+        <p className="text-2xl font-bold text-blue-900">
+          ${result.data.portfolio.live_total_value?.toLocaleString()}
+        </p>
+        <p className="text-xs text-gray-500">vs ${result.data.portfolio.total_value?.toLocaleString()} parsed</p>
+      </div>
+      
+      <div className="bg-white rounded-lg p-4 text-center shadow-sm">
+        <p className="text-sm text-green-600 font-medium">Live Gain/Loss</p>
+        <p className={`text-2xl font-bold ${
+          (result.data.portfolio.live_total_gain_loss || 0) >= 0 ? 'text-green-900' : 'text-red-900'
+        }`}>
+          {(result.data.portfolio.live_total_gain_loss || 0) >= 0 ? '+' : ''}
+          ${result.data.portfolio.live_total_gain_loss?.toFixed(2) || '0.00'}
+        </p>
+        <p className={`text-sm ${
+          (result.data.portfolio.live_total_gain_loss_percent || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+        }`}>
+          {(result.data.portfolio.live_total_gain_loss_percent || 0) >= 0 ? '+' : ''}
+          {result.data.portfolio.live_total_gain_loss_percent?.toFixed(2) || '0.00'}%
+        </p>
+      </div>
+      
+      <div className="bg-white rounded-lg p-4 text-center shadow-sm">
+        <p className="text-sm text-purple-600 font-medium">Real Data</p>
+        <p className="text-2xl font-bold text-purple-900">
+          {result.data.portfolio.real_data_count || 0}
+        </p>
+        <p className="text-xs text-gray-500">
+          of {result.data.portfolio.holdings_with_live_data || 0} holdings
+        </p>
+      </div>
+      
+      <div className="bg-white rounded-lg p-4 text-center shadow-sm">
+        <p className="text-sm text-orange-600 font-medium">Data Source</p>
+        <p className="text-lg font-bold text-orange-900">
+          {result.data.portfolio.real_data_count === result.data.portfolio.holdings_with_live_data ? 
+            '✅ All Real' : 
+            `${result.data.portfolio.mock_data_count || 0} Mock`}
+        </p>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* Enhanced Holdings Table */}
+{result.data.portfolio.holdings && result.data.portfolio.holdings.length > 0 && (
+  <div>
+    <h4 className="font-medium text-gray-900 mb-3">📊 Live Holdings Data</h4>
+    <div className="overflow-x-auto">
+      <table className="min-w-full divide-y divide-gray-200">
+        <thead className="bg-gray-50">
+          <tr>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Symbol</th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Live Price</th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Live Value</th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price Change</th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data Source</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-200">
+          {result.data.portfolio.holdings.map((holding: any, index: number) => (
+            <tr key={index} className={holding.is_real_data ? 'bg-green-50' : 'bg-yellow-50'}>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="flex items-center">
+                  <span className="font-medium text-gray-900">{holding.symbol}</span>
+                  {holding.is_real_data && <span className="ml-2 text-green-600">✅</span>}
+                </div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-gray-700">
+                {holding.quantity || '-'}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="text-gray-900 font-medium">
+                  ${holding.live_price?.toFixed(2) || holding.current_price?.toFixed(2) || '-'}
+                </div>
+                {holding.live_price && (
+                  <div className={`text-xs ${holding.price_change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {holding.price_change >= 0 ? '+' : ''}${holding.price_change?.toFixed(2)} 
+                    ({holding.price_change_percent?.toFixed(2)}%)
                   </div>
                 )}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-gray-700">
+                <div className="font-medium">
+                  ${holding.live_market_value?.toLocaleString() || holding.market_value?.toLocaleString() || '-'}
+                </div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                {holding.price_change !== undefined ? (
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    holding.price_change >= 0 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-red-100 text-red-800'
+                  }`}>
+                    {holding.price_change >= 0 ? '↗️' : '↘️'} 
+                    {holding.price_change >= 0 ? '+' : ''}
+                    {holding.price_change_percent?.toFixed(2)}%
+                  </span>
+                ) : '-'}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  holding.is_real_data 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-yellow-100 text-yellow-800'
+                }`}>
+                  {holding.data_source || 'unknown'}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
               </div>
             )}
           </div>
