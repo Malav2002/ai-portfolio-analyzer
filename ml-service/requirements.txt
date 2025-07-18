@@ -1,10 +1,33 @@
+# Core FastAPI dependencies
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 python-multipart==0.0.6
+aiofiles==23.2.1
+python-dotenv==1.0.0
+
+# HTTP requests
+httpx==0.25.2
+aiohttp==3.8.5
+requests==2.31.0
+
+# Image processing (basic)
 pillow==10.1.0
-pytesseract==0.3.10
-opencv-python==4.8.1.78
+
+# Data manipulation
 numpy==1.24.3
 pandas==2.1.4
-python-dotenv==1.0.0
-aiofiles==23.2.1
+
+# Financial data
+yfinance==0.2.18
+
+# Utilities
+python-dateutil==2.8.2
+pydantic==2.5.0
+pytesseract==0.3.13
+opencv-python
+asyncpg
+redis
+SQLAlchemy
+torch
+scikit-learn
+transformers

@@ -7,6 +7,46 @@ interface UploadedFile extends File {
   preview?: string;
 }
 
+// COMPLETELY SAFE formatting utility functions
+const safeFormatNumber = (num: any): string => {
+  if (typeof num !== 'number' || isNaN(num) || num === null || num === undefined) {
+    return '0';
+  }
+  return num.toLocaleString();
+};
+
+const safeFormatCurrency = (num: any): string => {
+  if (typeof num !== 'number' || isNaN(num) || num === null || num === undefined) {
+    return '$0.00';
+  }
+  return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
+const safeFormatDecimal = (num: any, decimals: number = 2): string => {
+  // SAFE CHECK BEFORE calling toFixed()
+  if (typeof num !== 'number' || isNaN(num) || num === null || num === undefined) {
+    return '0.' + '0'.repeat(decimals);
+  }
+  return num.toFixed(decimals);
+};
+
+// Safe file size formatter
+const safeFormatFileSize = (bytes: any): string => {
+  if (typeof bytes !== 'number' || isNaN(bytes) || bytes === null || bytes === undefined) {
+    return '0.0';
+  }
+  const megabytes = bytes / (1024 * 1024);
+  return megabytes.toFixed(1);
+};
+
+// Safe confidence formatter
+const safeFormatConfidence = (confidence: any): string => {
+  if (typeof confidence !== 'number' || isNaN(confidence) || confidence === null || confidence === undefined) {
+    return '0.0';
+  }
+  return (confidence * 100).toFixed(1);
+};
+
 function UploadForm() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [portfolioName, setPortfolioName] = useState('');
@@ -62,7 +102,7 @@ function UploadForm() {
       
     } catch (error) {
       console.error('Upload error:', error);
-      alert(`Upload failed: ${error.message}`);
+      alert(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsUploading(false);
     }
@@ -131,7 +171,7 @@ function UploadForm() {
                         {file.name}
                       </p>
                       <p className="text-sm text-gray-500">
-                        {(file.size / 1024 / 1024).toFixed(1)} MB
+                        {safeFormatFileSize(file.size)} MB
                       </p>
                     </div>
                     <button
@@ -188,38 +228,38 @@ function UploadForm() {
             </div>
 
             {/* OCR Results */}
-            {result.data.ocr_result && (
+            {result.data?.ocr_result && (
               <div className="bg-gray-50 rounded-lg p-4">
                 <h4 className="font-medium text-gray-900 mb-2">
-                  📄 Extracted Text (Confidence: {(result.data.ocr_result.confidence * 100).toFixed(1)}%)
+                  📄 Extracted Text (Confidence: {safeFormatConfidence(result.data.ocr_result.confidence)}%)
                 </h4>
                 <p className="text-sm text-gray-700 font-mono bg-white p-3 rounded border">
-                  {result.data.ocr_result.text}
+                  {result.data.ocr_result.text || 'No text extracted'}
                 </p>
               </div>
             )}
 
             {/* Portfolio Summary */}
-            {result.data.portfolio && (
+            {result.data?.portfolio && (
               <div>
                 <h4 className="font-medium text-gray-900 mb-3">📊 Portfolio Summary</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                   <div className="bg-blue-50 rounded-lg p-4 text-center">
                     <p className="text-sm text-blue-600 font-medium">Total Value</p>
                     <p className="text-2xl font-bold text-blue-900">
-                      ${result.data.portfolio.total_value?.toLocaleString() || 'N/A'}
+                      {safeFormatCurrency(result.data.portfolio.total_value) || 'N/A'}
                     </p>
                   </div>
                   <div className="bg-green-50 rounded-lg p-4 text-center">
                     <p className="text-sm text-green-600 font-medium">Holdings</p>
                     <p className="text-2xl font-bold text-green-900">
-                      {result.data.portfolio.holdings_count}
+                      {result.data.portfolio.holdings_count || 0}
                     </p>
                   </div>
                   <div className="bg-purple-50 rounded-lg p-4 text-center">
                     <p className="text-sm text-purple-600 font-medium">Broker</p>
                     <p className="text-2xl font-bold text-purple-900 capitalize">
-                      {result.data.portfolio.broker}
+                      {result.data.portfolio.broker || 'Unknown'}
                     </p>
                   </div>
                 </div>
@@ -241,23 +281,25 @@ function UploadForm() {
                         {result.data.portfolio.holdings.map((holding: any, index: number) => (
                           <tr key={index}>
                             <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
-                              {holding.symbol}
+                              {holding.symbol || 'N/A'}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-gray-700">
-                              {holding.quantity || '-'}
+                              {safeFormatNumber(holding.quantity) || '-'}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-gray-700">
-                              {holding.price ? `$${holding.price.toFixed(2)}` : '-'}
+                              {safeFormatCurrency(holding.price) || '-'}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-gray-700">
-                              {holding.value ? `$${holding.value.toLocaleString()}` : '-'}
+                              {safeFormatCurrency(holding.value) || '-'}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              {holding.gainLoss !== undefined ? (
+                              {holding.gainLoss !== undefined && holding.gainLoss !== null ? (
                                 <span className={holding.gainLoss >= 0 ? 'text-green-600' : 'text-red-600'}>
-                                  {holding.gainLoss >= 0 ? '+' : ''}${holding.gainLoss.toFixed(2)}
+                                  {holding.gainLoss >= 0 ? '+' : ''}{safeFormatCurrency(holding.gainLoss)}
                                 </span>
-                              ) : '-'}
+                              ) : (
+                                <span className="text-gray-500">-</span>
+                              )}
                             </td>
                           </tr>
                         ))}

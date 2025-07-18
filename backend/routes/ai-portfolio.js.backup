@@ -1,0 +1,444 @@
+// backend/routes/ai-portfolio.js - Docker-Optimized Real Data Routes
+const express = require('express');
+const multer = require('multer');
+const axios = require('axios');
+const FormData = require('form-data');
+const router = express.Router();
+
+console.log('🐳 Docker-Optimized AI Portfolio routes loaded - REAL DATA ONLY');
+
+// Configure multer for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  }
+});
+
+// Docker container URLs - Use container names for internal communication
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://ml-service:8002';
+const ALPHA_VANTAGE_KEY = process.env.ALPHA_VANTAGE_API_KEY;
+const FMP_KEY = process.env.FINANCIAL_MODELING_PREP_API_KEY;
+
+console.log(`🔗 ML Service URL: ${ML_SERVICE_URL}`);
+console.log(`🔑 Alpha Vantage: ${ALPHA_VANTAGE_KEY ? 'Configured' : 'Not configured'}`);
+console.log(`🔑 FMP: ${FMP_KEY ? 'Configured' : 'Not configured'}`);
+
+// Service availability tracking
+let mlServiceAvailable = false;
+
+// Check ML service availability with Docker-specific handling
+const checkMLService = async () => {
+  try {
+    console.log(`🔍 Checking ML service at ${ML_SERVICE_URL}/health`);
+    const response = await axios.get(`${ML_SERVICE_URL}/health`, { 
+      timeout: 5000,
+      headers: {
+        'User-Agent': 'Backend-Service/1.0'
+      }
+    });
+    mlServiceAvailable = response.status === 200;
+    console.log(`🔍 ML Service: ${mlServiceAvailable ? '✅ Available' : '❌ Unavailable'}`);
+    if (mlServiceAvailable) {
+      console.log(`📊 ML Service response: ${JSON.stringify(response.data).substring(0, 100)}...`);
+    }
+    return mlServiceAvailable;
+  } catch (error) {
+    mlServiceAvailable = false;
+    console.log(`❌ ML Service check failed: ${error.message}`);
+    if (error.code === 'ECONNREFUSED') {
+      console.log('💡 Suggestion: Ensure ml-service container is running and healthy');
+    }
+    return false;
+  }
+};
+
+// Initial check and periodic checks
+checkMLService();
+setInterval(checkMLService, 30000);
+
+// Enhanced Yahoo Finance data fetching (works without additional dependencies in Docker)
+const getYahooFinanceData = async (symbol) => {
+  try {
+    // Using Yahoo Finance query API directly
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`;
+    const response = await axios.get(url, {
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+
+    const data = response.data;
+    if (data.chart && data.chart.result && data.chart.result[0]) {
+      const result = data.chart.result[0];
+      const meta = result.meta;
+      
+      return {
+        symbol: symbol,
+        price: meta.regularMarketPrice,
+        change: meta.regularMarketPrice - meta.previousClose,
+        change_percent: ((meta.regularMarketPrice - meta.previousClose) / meta.previousClose) * 100,
+        volume: meta.regularMarketVolume,
+        high: meta.regularMarketDayHigh,
+        low: meta.regularMarketDayLow,
+        open: meta.regularMarketOpen,
+        previous_close: meta.previousClose,
+        market_cap: meta.marketCap || 0,
+        source: 'yahoo_finance_direct',
+        timestamp: new Date().toISOString()
+      };
+    }
+    throw new Error('Invalid response format');
+  } catch (error) {
+    console.log(`❌ Yahoo Finance failed for ${symbol}: ${error.message}`);
+    throw error;
+  }
+};
+
+// Get real market data with multiple sources
+const getRealMarketData = async (symbol) => {
+  console.log(`📊 Getting REAL market data for ${symbol}`);
+  
+  // Try Yahoo Finance first (most reliable)
+  try {
+    const quote = await getYahooFinanceData(symbol);
+    console.log(`✅ Yahoo Finance data for ${symbol}: $${quote.price}`);
+    return quote;
+  } catch (error) {
+    console.log(`⚠️ Yahoo Finance failed for ${symbol}, trying alternatives...`);
+  }
+
+  // Try Alpha Vantage if configured
+  if (ALPHA_VANTAGE_KEY) {
+    try {
+      const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_KEY}`;
+      const response = await axios.get(url, { timeout: 10000 });
+      
+      const quoteData = response.data['Global Quote'];
+      if (quoteData && quoteData['05. price']) {
+        console.log(`✅ Alpha Vantage data for ${symbol}: $${quoteData['05. price']}`);
+        return {
+          symbol: symbol,
+          price: parseFloat(quoteData['05. price']),
+          change: parseFloat(quoteData['09. change']),
+          change_percent: parseFloat(quoteData['10. change percent'].replace('%', '')),
+          volume: parseInt(quoteData['06. volume']),
+          high: parseFloat(quoteData['03. high']),
+          low: parseFloat(quoteData['04. low']),
+          open: parseFloat(quoteData['02. open']),
+          previous_close: parseFloat(quoteData['08. previous close']),
+          source: 'alpha_vantage',
+          timestamp: new Date().toISOString()
+        };
+      }
+    } catch (error) {
+      console.log(`⚠️ Alpha Vantage failed for ${symbol}: ${error.message}`);
+    }
+  }
+
+  // Try Financial Modeling Prep if configured
+  if (FMP_KEY) {
+    try {
+      const url = `https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${FMP_KEY}`;
+      const response = await axios.get(url, { timeout: 10000 });
+      
+      if (response.data && response.data[0]) {
+        const data = response.data[0];
+        console.log(`✅ FMP data for ${symbol}: $${data.price}`);
+        return {
+          symbol: symbol,
+          price: data.price,
+          change: data.change,
+          change_percent: data.changesPercentage,
+          volume: data.volume,
+          high: data.dayHigh,
+          low: data.dayLow,
+          open: data.open,
+          previous_close: data.previousClose,
+          market_cap: data.marketCap,
+          source: 'financial_modeling_prep',
+          timestamp: new Date().toISOString()
+        };
+      }
+    } catch (error) {
+      console.log(`⚠️ Financial Modeling Prep failed for ${symbol}: ${error.message}`);
+    }
+  }
+
+  // If all sources fail, throw error
+  throw new Error(`Unable to get real market data for ${symbol} from any source`);
+};
+
+// Health check endpoint
+router.get('/health', async (req, res) => {
+  console.log('❤️ Docker AI Health check');
+  
+  const mlStatus = await checkMLService();
+  
+  res.json({
+    success: true,
+    service: 'docker-ai-portfolio',
+    timestamp: new Date().toISOString(),
+    environment: 'docker',
+    real_data_only: true,
+    services: {
+      ml_service: {
+        available: mlStatus,
+        url: ML_SERVICE_URL,
+        container_communication: true
+      },
+      market_data: {
+        yahoo_finance: 'enabled',
+        alpha_vantage: !!ALPHA_VANTAGE_KEY,
+        financial_modeling_prep: !!FMP_KEY
+      }
+    }
+  });
+});
+
+// Test endpoint
+router.get('/test', (req, res) => {
+  console.log('🧪 Docker AI Test endpoint');
+  res.json({
+    success: true,
+    message: 'Docker AI routes working!',
+    timestamp: new Date().toISOString(),
+    container: 'backend',
+    ml_service_url: ML_SERVICE_URL
+  });
+});
+
+// **MAIN ANALYZE ENDPOINT - DOCKER OPTIMIZED**
+router.post('/analyze', upload.single('image'), async (req, res) => {
+  console.log('🐳 Docker Portfolio Analysis Started');
+  
+  try {
+    // Validate image upload
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No image file provided',
+        message: 'Please upload a portfolio screenshot'
+      });
+    }
+
+    console.log(`📸 Processing image: ${req.file.originalname} (${(req.file.size / 1024 / 1024).toFixed(2)} MB)`);
+
+    // Step 1: Check ML service availability
+    const mlStatus = await checkMLService();
+    if (!mlStatus) {
+      return res.status(503).json({
+        success: false,
+        error: 'ML Service unavailable',
+        message: 'Portfolio extraction requires ML service',
+        details: 'ML service container is not responding',
+        troubleshooting: [
+          'Check if ml-service container is running: docker ps',
+          'Check ml-service logs: docker logs portfolio_ml_service',
+          'Verify ml-service health: docker exec portfolio_ml_service curl http://localhost:8002/health',
+          'Restart containers: docker-compose restart'
+        ]
+      });
+    }
+
+    // Step 2: Extract portfolio using real OCR
+    console.log('🔍 Extracting portfolio with real OCR via ML service...');
+    
+    const formData = new FormData();
+    formData.append('file', req.file.buffer, {
+      filename: req.file.originalname,
+      contentType: req.file.mimetype
+    });
+
+    let portfolioData;
+    try {
+      console.log(`📤 Sending to ML service: ${ML_SERVICE_URL}/api/portfolio/analyze`);
+      
+      const mlResponse = await axios.post(`${ML_SERVICE_URL}/api/portfolio/analyze`, formData, {
+        headers: {
+          ...formData.getHeaders(),
+          'Content-Length': formData.getLengthSync()
+        },
+        timeout: 120000 // 2 minutes for Docker environment
+      });
+
+      console.log('📥 ML service response received');
+      
+      if (!mlResponse.data || !mlResponse.data.success) {
+        throw new Error(`ML service error: ${JSON.stringify(mlResponse.data)}`);
+      }
+
+      portfolioData = mlResponse.data.analysis?.portfolio_data || mlResponse.data.portfolio_data;
+      console.log(`✅ OCR Success: ${portfolioData.holdings?.length || 0} holdings extracted`);
+      
+    } catch (error) {
+      console.error('❌ ML service call failed:', error.message);
+      return res.status(500).json({
+        success: false,
+        error: 'Portfolio extraction failed',
+        message: 'ML service could not process the image',
+        details: error.response?.data || error.message,
+        ml_service_url: ML_SERVICE_URL,
+        troubleshooting: [
+          'Verify image is a clear portfolio screenshot',
+          'Check ML service logs for specific errors',
+          'Ensure image contains visible stock symbols and values',
+          'Try a higher resolution image'
+        ]
+      });
+    }
+
+    // Validate extracted data
+    if (!portfolioData?.holdings || portfolioData.holdings.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No holdings found',
+        message: 'OCR could not identify any stock holdings in the image',
+        extraction_details: portfolioData,
+        suggestions: [
+          'Ensure image clearly shows stock symbols and quantities',
+          'Use a clearer or higher resolution image',
+          'Verify image contains a portfolio statement'
+        ]
+      });
+    }
+
+    // Step 3: Enrich with real market data
+    console.log('📈 Fetching real-time market data...');
+    
+    const enrichedHoldings = [];
+    const errors = [];
+
+    for (const holding of portfolioData.holdings) {
+      try {
+        console.log(`💰 Processing ${holding.symbol}...`);
+        
+        const marketData = await getRealMarketData(holding.symbol);
+        
+        // Calculate live values
+        const liveMarketValue = holding.shares * marketData.price;
+        const costBasis = holding.shares * (holding.average_cost || holding.current_price || marketData.price);
+        const liveGainLoss = liveMarketValue - costBasis;
+        const liveGainLossPercent = costBasis > 0 ? (liveGainLoss / costBasis) * 100 : 0;
+
+        enrichedHoldings.push({
+          ...holding,
+          live_price: marketData.price,
+          live_change: marketData.change,
+          live_change_percent: marketData.change_percent,
+          live_market_value: Math.round(liveMarketValue * 100) / 100,
+          live_gain_loss: Math.round(liveGainLoss * 100) / 100,
+          live_gain_loss_percent: Math.round(liveGainLossPercent * 100) / 100,
+          volume: marketData.volume,
+          market_cap: marketData.market_cap,
+          data_source: marketData.source,
+          last_updated: marketData.timestamp
+        });
+
+        console.log(`✅ ${holding.symbol}: $${marketData.price} (${marketData.source})`);
+        
+      } catch (error) {
+        console.error(`❌ Market data failed for ${holding.symbol}: ${error.message}`);
+        errors.push({ symbol: holding.symbol, error: error.message });
+      }
+    }
+
+    if (enrichedHoldings.length === 0) {
+      return res.status(500).json({
+        success: false,
+        error: 'No market data available',
+        message: 'Could not get current prices for any holdings',
+        market_data_errors: errors,
+        troubleshooting: [
+          'Check internet connectivity in Docker container',
+          'Verify API keys are properly passed to container',
+          'Check if symbols are valid'
+        ]
+      });
+    }
+
+    // Step 4: Calculate portfolio metrics
+    console.log('📊 Calculating portfolio metrics...');
+    
+    const totalMarketValue = enrichedHoldings.reduce((sum, h) => sum + h.live_market_value, 0);
+    const totalCostBasis = enrichedHoldings.reduce((sum, h) => sum + (h.shares * (h.average_cost || h.current_price || h.live_price)), 0);
+    const totalGainLoss = totalMarketValue - totalCostBasis;
+    const totalGainLossPercent = totalCostBasis > 0 ? (totalGainLoss / totalCostBasis) * 100 : 0;
+
+    // Step 5: Generate analysis
+    const analysis = {
+      success: true,
+      portfolio_data: {
+        holdings: enrichedHoldings,
+        portfolio_summary: {
+          total_market_value: Math.round(totalMarketValue * 100) / 100,
+          total_cost_basis: Math.round(totalCostBasis * 100) / 100,
+          total_gain_loss: Math.round(totalGainLoss * 100) / 100,
+          total_gain_loss_percent: Math.round(totalGainLossPercent * 100) / 100,
+          total_holdings: enrichedHoldings.length,
+          environment: 'docker'
+        }
+      },
+      extraction_details: {
+        method: 'real_ocr_docker',
+        ml_service: ML_SERVICE_URL,
+        holdings_processed: enrichedHoldings.length,
+        market_data_errors: errors.length,
+        confidence: portfolioData.confidence || 0.9
+      },
+      timestamp: new Date().toISOString()
+    };
+
+    console.log(`✅ Docker analysis complete: ${enrichedHoldings.length} holdings, $${totalMarketValue.toFixed(2)} total`);
+    
+    res.json(analysis);
+
+  } catch (error) {
+    console.error('❌ Docker analysis failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Analysis failed',
+      message: error.message,
+      environment: 'docker',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Stock quote endpoint
+router.get('/quote/:symbol', async (req, res) => {
+  const symbol = req.params.symbol.toUpperCase();
+  console.log(`📊 Docker quote request for ${symbol}`);
+  
+  try {
+    const marketData = await getRealMarketData(symbol);
+    
+    res.json({
+      success: true,
+      symbol: symbol,
+      quote: marketData,
+      environment: 'docker',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error(`❌ Docker quote failed for ${symbol}:`, error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Market data unavailable',
+      symbol: symbol,
+      message: error.message
+    });
+  }
+});
+
+console.log('✅ Docker AI Portfolio routes initialized - REAL DATA ONLY');
+
+module.exports = router;

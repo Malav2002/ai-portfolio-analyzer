@@ -37,7 +37,7 @@ app.use((req, res, next) => {
 let portfolioRoutes, aiRoutes;
 
 try {
-  portfolioRoutes = require('../routes/portfolio');
+  portfolioRoutes = require('./routes/portfolio');
   console.log('✅ Portfolio routes loaded successfully');
 } catch (error) {
   console.error('❌ Error loading portfolio routes:', error.message);

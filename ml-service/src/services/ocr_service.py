@@ -1,3 +1,4 @@
+
 import pytesseract
 import cv2
 import numpy as np
@@ -228,6 +229,7 @@ class OCRService:
     async def extract_text(self, image_bytes: bytes) -> Dict:
         """
         Extract text using the best method for the image
+        This is the main method that should be called
         """
         # Try layout-aware extraction first (better for tables)
         layout_result = await self.extract_text_with_layout(image_bytes)
@@ -240,3 +242,12 @@ class OCRService:
         # Otherwise fall back to standard extraction
         logger.info("Layout extraction failed, using standard OCR")
         return await self.extract_text_tesseract(image_bytes)
+
+    # COMPATIBILITY METHOD: Add the method that was being called incorrectly
+    async def extract_text_from_image(self, image_bytes: bytes) -> Dict:
+        """
+        Compatibility method - redirects to extract_text
+        DEPRECATED: Use extract_text instead
+        """
+        logger.warning("extract_text_from_image is deprecated, use extract_text instead")
+        return await self.extract_text(image_bytes)
